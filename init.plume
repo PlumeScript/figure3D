@@ -1,0 +1,301 @@
+/*
+Figure3D - v0.1.0
+
+Copyright © 2026-2026 Erwan Barbedor
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+use #rawNumbers
+use html, css, pages
+
+macro SvgPath(d, ...attrs)
+	@Tag(Path, $empty, ...attrs)
+		d: $d
+	end
+end
+
+macro SvgEllipse (cx:, cy:, rx:, ry:, ...attrs)
+	@Tag(ellipse, $empty, ?autoClose, ...attrs)
+		cx: $cx
+		cy: $cy
+		rx: $rx
+		ry: $ry
+		stroke: black
+	end
+end
+
+macro Canva(content)
+	<svg\s
+		// With Tag, viewBox will be rendered as view-box
+		viewBox="0 0 100 100"\s
+		xmlns="http\:\//www.w3.org/2000/svg"
+	>
+		$content
+	</svg>
+end
+
+let viewH = 100
+let perspectiveX = $Context(1)
+let perspectiveY = $Context(0.5)
+
+macro project(vect)
+	let px = $perspectiveX()
+	let py = $perspectiveY()
+	let x, y, z = $vect
+	return ($(x + z*px), $(viewH - y + z*py))
+end
+
+macro Edges(stroke: black, fill: #0000, ?hidden, ?noClose, ...vects)
+	@SvgPath(stroke: $stroke, strokeWidth: 0.02em, strokeDasharray: $(hidden and "3"), fill: $fill)
+		if not noClose
+			set vects = (...vects, $vects[1])
+		end
+		for i, vect in enumerate(vects)
+			let x, y = $ project(vect)
+			if i==1
+				M $x $y
+			else
+				L $x $y
+			end
+		end
+	end
+end
+
+macro Circle(center, r, stroke: black, fill: #0000)
+	let x, y = $ project(center)
+	@SvgEllipse(stroke:black, strokeWidth: 0.02em)
+		cx: $x
+		cy: $y
+		rx: $r
+		ry: $ r * perspectiveY()
+		stroke: $stroke
+		fill: $fill
+	end
+end
+
+macro BaseCircle(center, r, stroke: black, fill: #0000)
+    let x, y = $ project(center)
+    let ry = $(r * perspectiveY())
+    @SvgPath(stroke: $stroke, strokeWidth: 0.02em, fill: $fill)
+        M $(x - r) $y\s
+        A $r $ry 0 0 0 $(x + r) $y
+    end
+    @SvgPath(stroke: $stroke, strokeWidth: 0.02em, strokeDasharray: 3, fill: $fill)
+        M $(x - r) $y\s
+        A $r $ry 0 0 1 $(x + r) $y
+    end
+end
+
+
+Cuboid: macro (x, y, z, w, h, d, ?fromBottom, ?fromRight)
+	let px = $perspectiveX()
+	let py = $perspectiveY()
+	if fromRight
+        set px *= -1
+    end
+    if fromBottom
+        set py *= -1
+		set y -= $ py*d
+    end
+
+	let faces = do
+		- do
+			- $ (x, y, z)
+			- $ (x, y+h, z)
+			- $ (x+w, y+h, z)
+			- $ (x+w, y, z)
+		end
+
+		// Bottom
+		- do
+			hidden: $(not fromBottom)
+			- $ (x, y, z)
+			- $ (x, y, z - d)
+			- $ (x+w, y, z - d)
+			- $ (x+w, y, z)
+		end
+		
+		
+		// Right Side
+		- do
+			fill: $ fromRight and "#ddd"
+			hidden: $(not fromRight)
+			- $ (x+w, y, z-d)
+			- $ (x+w, y+h, z-d)
+			- $ (x+w, y+h, z)
+			- $ (x+w, y, z)
+		end
+
+		// Top
+		- do
+			fill: #fafafa
+			hidden: $fromBottom
+			- $ (x+w, y+h, z-d)
+			- $ (x, y+h, z-d)
+			- $ (x, y+h, z)
+			- $ (x+w, y+h, z)
+		end
+		
+		// Left side
+		- do
+			fill: $ (not fromRight) and "#ddd"
+			hidden: $fromRight
+			- $ (x, y, z)
+			- $ (x, y, z - d)
+			- $ (x, y+h, z - d)
+			- $ (x, y+h, z)
+		end
+		
+	end
+
+	if fromRight
+		set faces[3], faces[5] = ($faces[5], $faces[3])
+	end
+	
+	with ($perspectiveX: $px, $perspectiveY: $py)
+		for face in faces
+			let args = (...face, stroke: #0000, fill: $(face.fill? or "#f0f0f0"))
+			$Edges(...args)
+		end
+		for face in faces
+			let args = (...face, stroke: #000, fill:#0000)
+			$Edges(...args)
+		end
+	end
+end
+
+Cylinder: macro (x, y, z, r, h)
+	@Edges(fill: #f0f0f0, stroke: #0000)
+		- $ (x+r, y, z)
+		- $ (x-r, y, z)
+		- $ (x-r, y+h, z)
+		- $ (x+r, y+h, z)
+	end
+
+	@Edges(?noClose)
+		- $ (x+r, y, z)
+		- $ (x+r, y+h, z)
+	end
+
+	@Edges(?noClose)
+		- $ (x-r, y+h, z)
+		- $ (x-r, y, z)
+	end
+
+	$ BaseCircle((x, y, z), r, fill: "#ddd")
+	$ Circle((x, y+h, z), r, fill: "#fafafa")
+end
+
+Cone: macro (x, y, z, r, h, sx: 0.5, sz: 0.5)
+    @Edges(fill: #f0f0f0, stroke: #0000)
+        - $ (x+r, y, z)
+        - $ (x+(sx-0.5)*r, y+h, z+(sz-0.5)*r)
+        - $ (x-r, y, z)
+    end
+	@Edges(?noClose)
+        - $ (x+r, y, z)
+        - $ (x+(sx-0.5)*r, y+h, z+(sz-0.5)*r)
+        - $ (x-r, y, z)
+    end
+    $ BaseCircle((x, y, z), r, fill: "#ddd")
+end
+
+macro cross(a, b)
+    let ax, ay, az = $a
+    let bx, by, bz = $b
+    return $ (ay*bz - az*by, az*bx - ax*bz, ax*by - ay*bx)
+end
+
+macro dot(a, b)
+    let ax, ay, az = $a
+    let bx, by, bz = $b
+    return $ ax*bx + ay*by + az*bz
+end
+
+ref Pyramid: macro (x, y, z, w, h, d, sx:0.5, sz:0.5, ...base)
+    let apex = $ (x+w*sx, y+h, z-d*sz)
+    let camDir = do
+        - $ -perspectiveX()
+        - $ perspectiveY()
+        - 1
+    end
+    let n = $len(base)
+
+    let bcx, bcy, bcz = (0, 0, 0)
+    for p in base
+        set bcx += $p[1]
+        set bcy += $p[2]
+        set bcz += $p[3]
+    end
+    let bc = $ (bcx/n, bcy/n, bcz/n)
+
+    let faces = $plume.Table($base)
+    let hidden = do
+        - $true
+        for i in seq(n)
+            let v1 = $base[i]
+            let v2 = $ base[i+1]? or base[1]
+            let e1 = $ (v2[1]-v1[1], v2[2]-v1[2], v2[3]-v1[3])
+            let e2 = $ (apex[1]-v1[1], apex[2]-v1[2], apex[3]-v1[3])
+            let nn = $ cross(e1, e2)
+            let fc = $ ((v1[1]+v2[1]+apex[1])/3, (v1[2]+v2[2]+apex[2])/3, (v1[3]+v2[3]+apex[3])/3)
+            if dot(nn, (fc[1]-bc[1], fc[2]-bc[2], fc[3]-bc[3])) < 0
+                set nn = $ (-nn[1], -nn[2], -nn[3])
+            end
+            - $ dot(nn, camDir) <= 0
+        end
+    end
+
+    for i in seq(n)
+        if not hidden[i+1]
+            $ Edges(base[i], base[i+1]? or base[1], apex, stroke: "#0000", fill: "#f0f0f0")
+        end
+    end
+
+	$ Edges(stroke: "#0000", fill: "#ddd", ...base)
+
+    for i in seq(n)
+        let v1 = $base[i]
+        let v2 = $ base[i+1]? or base[1]
+        let j  = $ i + 1
+        let jp = $((i == 1) and n + 1 or i)
+        let js = $((i == n) and 2 or i + 2)
+        $Edges($v1, $v2, stroke: #000, fill: #0000, hidden: $(hidden[j]), ?noClose)
+        $Edges($v1, $apex, stroke: #000, fill: #0000, hidden: $(hidden[j] and hidden[jp]) ?noClose)
+        $Edges($v2, $apex, stroke: #000, fill: #0000, hidden: $(hidden[j] and hidden[js]), ?noClose)
+    end
+end
+
+
+RectPyramid: macro (x, y, z, w, h, d, sx:0.5, sz:0.5)
+	@Pyramid
+		- $x
+		- $y
+		- $z
+		- $w
+		- $h
+		- $d
+		- $ (x+w, y, z-d)
+		- $ (x, y, z-d)
+		- $ (x, y, z)
+		- $ (x+w, y, z)
+		sx: $sx
+		sz: $sz
+	end
+end

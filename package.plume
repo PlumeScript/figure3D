@@ -1,0 +1,12 @@
+plumeVersion: b65 (Raven Edition)
+name: figure3D
+author: Erwan Barbedor
+description: Generate solid representation in a svg canva.
+version: 0.1.0
+source: github.com/PlumeScript/figure3D
+required: do
+	html: do
+		version: ^0.3.x
+		source: github.com/PlumeScript/html
+	end
+end
