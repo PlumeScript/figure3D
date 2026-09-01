@@ -40,7 +40,7 @@ macro SvgEllipse (cx:, cy:, rx:, ry:, ...attrs)
 	end
 end
 
-macro Canva(content)
+ref Canva: macro(content)
 	<svg\s
 		// With Tag, viewBox will be rendered as view-box
 		viewBox="0 0 100 100"\s
